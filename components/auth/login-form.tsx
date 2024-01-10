@@ -47,8 +47,7 @@ export const LoginForm = () => {
     startTransition(() => {
       login(values).then((data) => {
         setError(data?.error);
-        // TODO: Add when add 2FA
-        // setSuccess(data?.success);
+        setSuccess(data?.success);
       });
     });
   };
@@ -73,7 +72,7 @@ export const LoginForm = () => {
                     <Input
                       {...field}
                       disabled={isPending}
-                      placeholder="john.deo@example.com"
+                      placeholder="john.doe@example.com"
                       type="email"
                     />
                   </FormControl>
