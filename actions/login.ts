@@ -1,6 +1,7 @@
 "use server";
 
 import * as z from "zod";
+import bcrypt from "bcryptjs";
 import { AuthError } from "next-auth";
 
 import { db } from "@/lib/db";
@@ -20,7 +21,7 @@ export const login = async (
   const validatedFields = LoginSchema.safeParse(values);
 
   if (!validatedFields.success) {
-    return { error: "Invalid fields" };
+    return { error: "Invalid fields!" };
   }
 
   const { email, password, code } = validatedFields.data;
@@ -41,10 +42,20 @@ export const login = async (
       verificationToken.token
     );
 
-    return { success: "Confirmation mail sent!" };
+    return { success: "Confirmation email sent!" };
   }
 
   if (existingUser.isTwoFactorEnabled && existingUser.email) {
+    // Check password before proceeding with 2FA
+    const isPasswordValid = await bcrypt.compare(
+      password,
+      existingUser.password
+    );
+
+    if (!isPasswordValid) {
+      return { error: "Invalid credentials!" };
+    }
+
     if (code) {
       const twoFactorToken = await getTwoFactorTokenByEmail(existingUser.email);
 
@@ -53,17 +64,17 @@ export const login = async (
       }
 
       if (twoFactorToken.token !== code) {
-        return { error: "Invalid token!" };
+        return { error: "Invalid code!" };
       }
 
       const hasExpired = new Date(twoFactorToken.expires) < new Date();
 
       if (hasExpired) {
-        return { error: "Expired token!" };
+        return { error: "Code expired!" };
       }
 
       await db.twoFactorToken.delete({
-        where: { token: twoFactorToken.token },
+        where: { id: twoFactorToken.id },
       });
 
       const existingConfirmation = await getTwoFactorConfirmationByUserId(
@@ -81,7 +92,6 @@ export const login = async (
       });
     } else {
       const twoFactorToken = await generateTwoFactorToken(existingUser.email);
-
       await sendTwoFactorTokenEmail(twoFactorToken.email, twoFactorToken.token);
 
       return { twoFactor: true };
@@ -99,7 +109,6 @@ export const login = async (
       switch (error.type) {
         case "CredentialsSignin":
           return { error: "Invalid credentials!" };
-
         default:
           return { error: "Something went wrong!" };
       }
